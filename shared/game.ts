@@ -10,10 +10,16 @@ export type Player = { id: string; name: string; lives: number; score: number; c
 export type RoomView = {
   code: string; mode: Mode; status: 'lobby' | 'playing' | 'finished'; players: Player[]; hostId: string; publicMatch?: boolean
   round: number; pointerId: string | null; dodgerId: string | null; submitted: string[]
+  // Sequential turn: 'pointer' (Pointer aims, hidden from others) -> 'dodger' (Pointer's locked
+  // direction is revealed, Dodger moves) -> 'result'. phaseEndsAt drives the on-screen timer.
+  phase: Phase | null; phaseEndsAt: number | null
   aimDirection: Direction | null
-  result: { pointerDirection: string; dodgeDirection: string; caught: boolean; message: string; timedOut?: string[] } | null
+  result: { pointerDirection: Direction | null; dodgeDirection: Direction | null; caught: boolean; message: string; timedOut?: string[] } | null
   winnerId: string | null; countdownEndsAt: number | null
 }
+export type Phase = 'pointer' | 'dodger' | 'result'
+export const POINTER_MS = 12_000
+export const DODGER_MS = 12_000
 
 export const modeLabel = (mode: Mode) => MODES[mode].label
 
