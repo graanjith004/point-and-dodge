@@ -41,12 +41,14 @@ function cleanName(value: unknown) { return typeof value === 'string' ? value.tr
 function validMode(value: unknown): value is Mode { return value === 'basic' || value === 'classic' || value === 'pro' }
 function code() { return randomInt(0, 36 ** 5).toString(36).toUpperCase().padStart(5, '0') }
 function makePlayer(id: string, name: string): Player { return { id, name, lives: 3, score: 0, connected: true } }
-function view(room: GameRoom): RoomView {
+function view(room: GameRoom, recipientId?: string): RoomView {
   const { picks: _picks, turnIndex: _turn, streak: _streak, turnTimer: _timer, nextTimer: _next, fillTimer: _fill, public: isPublic, ...safe } = room
   safe.publicMatch = isPublic
+  // Never reveal the Pointer's live aim to the Dodger before both moves are locked.
+  if (recipientId === room.dodgerId && room.status === 'playing' && !room.result) safe.aimDirection = null
   return safe
 }
-function publish(room: GameRoom) { io.to(room.code).emit('room:update', view(room)) }
+function publish(room: GameRoom) { for (const player of room.players) io.to(player.id).emit('room:update', view(room, player.id)) }
 function attach(room: GameRoom, socket: Socket, name: string) {
   if (room.players.length >= 8) return false
   room.players.push(makePlayer(socket.id, name))
