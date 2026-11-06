@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.DS_Store
+android/.gradle/
+android/local.properties
+android/**/build/
+
+work/
+.codex-remote-attachments/
+outputs/
+
