@@ -3,7 +3,7 @@ import { FaceLandmarker, FilesetResolver, HandLandmarker } from '@mediapipe/task
 import type { Direction, Mode } from '../shared/game'
 
 type Role = 'Pointer' | 'Dodger'
-type Props = { role: Role; mode: Mode; round: number; active: boolean; locked: boolean; demo?: boolean; immersive?: boolean; autoStart?: boolean; targetDirection?: Direction | null; onPreview?: (direction: Direction | null) => void; onSelect: (direction: Direction) => void }
+type Props = { role: Role; mode: Mode; round: number; active: boolean; locked: boolean; demo?: boolean; immersive?: boolean; autoStart?: boolean; targetDirection?: Direction | null; manualDirection?: Direction | null; onPreview?: (direction: Direction | null) => void; onSelect: (direction: Direction) => void }
 type Landmark = { x: number; y: number; z?: number }
 type Task = FaceLandmarker | HandLandmarker
 type CameraState = 'off' | 'loading' | 'calibrating' | 'ready' | 'error'
@@ -33,7 +33,7 @@ function taskOptions(model: string, delegate: 'GPU' | 'CPU') {
   return { baseOptions: { modelAssetPath: model, delegate }, runningMode: 'VIDEO' as const, numFaces: 1, numHands: 1, minFaceDetectionConfidence: 0.55, minFacePresenceConfidence: 0.55, minHandDetectionConfidence: 0.55, minHandPresenceConfidence: 0.55 }
 }
 
-export default function CameraInput({ role, mode, round, active, locked, demo = false, immersive = false, autoStart = false, targetDirection = null, onPreview, onSelect }: Props) {
+export default function CameraInput({ role, mode, round, active, locked, demo = false, immersive = false, autoStart = false, targetDirection = null, manualDirection = null, onPreview, onSelect }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const taskRef = useRef<Task | null>(null)
@@ -225,7 +225,7 @@ export default function CameraInput({ role, mode, round, active, locked, demo = 
     <div className="camera-heading"><div><span className="camera-kicker">CAMERA {state === 'ready' ? 'ACTIVE' : state === 'calibrating' ? 'CALIBRATING' : 'INPUT'}</span><strong>{role === 'Pointer' ? 'Point with your finger' : 'Dodge with your head'}</strong></div><span className={`camera-light ${state === 'ready' ? 'active' : ''}`}/></div>
     <div className={`camera-preview ${state === 'off' || state === 'error' ? 'camera-empty' : ''}`}>
       <video ref={videoRef} muted playsInline aria-label="Live camera preview" className={streamRef.current ? '' : 'video-hidden'}/>
-      {(!streamRef.current || state === 'error') && <div className="camera-placeholder"><span>{role === 'Pointer' ? '☝' : '◉'}</span><small>{role === 'Pointer' ? 'HAND TRACKING' : 'HEAD TRACKING'}</small></div>}
+      {(!streamRef.current || state === 'error') && <div className={`camera-placeholder emoji-avatar ${manualDirection ? `move-${manualDirection.toLowerCase()}` : ''}`}><span className="emoji-person">🧍</span><small>{manualDirection ? `MOVING ${words[manualDirection]}` : 'CHOOSE A DIRECTION'}</small></div>}
       {state !== 'off' && state !== 'error' && <div className="camera-overlay">↑<span>← ＋ →</span>↓</div>}
       {role === 'Dodger' && targetDirection && <div className="camera-target"><span>THE POINT</span><strong>{symbols[targetDirection]}</strong><b>DODGE OPPOSITE</b></div>}
       {prediction && <div className="camera-prediction"><b>{symbols[prediction]}</b> {words[prediction]}</div>}

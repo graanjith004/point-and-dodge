@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { io, Socket } from 'socket.io-client'
-import { MODES, Mode, RoomView } from '../shared/game'
+import { Direction, MODES, Mode, RoomView } from '../shared/game'
 import CameraInput from './CameraInput'
 
 type Notice = { kind: 'success' | 'error'; text: string } | null
@@ -16,6 +16,7 @@ export default function App() {
   const [notice, setNotice] = useState<Notice>(null)
   const [connected, setConnected] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [manualDirection, setManualDirection] = useState<Direction | null>(null)
   const configuredServerUrl = import.meta.env.VITE_GAME_SERVER_URL || import.meta.env.VITE_SOCKET_URL || ''
   const [serverUrl, setServerUrl] = useState(() => configuredServerUrl || window.localStorage.getItem('pnd:server-url') || '')
   const [, setClock] = useState(0)
@@ -168,10 +169,10 @@ export default function App() {
       {myRole === 'Dodger' && !room.result && <div className="opponent-signal" aria-live="polite"><span className="signal-hand">☝</span><div><b>OPPONENT HAND ACTIVE</b><small>Watch the gesture, then choose your dodge before time runs out. The final direction stays hidden.</small></div></div>}
       {room.result && <div className={`result-card ${room.result.caught ? 'caught' : 'dodged'}`}><strong>{room.result.caught ? '💥 CAUGHT — 1 LIFE LOST' : '🎉 SUCCESSFUL DODGE!'}</strong><span>{room.result.message} · Point {arrows[room.result.pointerDirection]} · Dodge {arrows[room.result.dodgeDirection]}</span></div>}
       {history.length > 0 && <div className="round-log" aria-label="Round history">{history.map((line, i) => <div key={i}>{line}</div>)}</div>}
-      {myRole && <CameraInput immersive role={myRole} mode={room.mode} round={room.round} targetDirection={myRole === 'Dodger' && room.turnPhase === 'dodger' ? room.aimDirection : null} active={myTurn && !room.submitted.includes(socket.id!)} locked={room.submitted.includes(socket.id!)} onPreview={direction => { if (myRole === 'Pointer' && myTurn) socket.emit('game:aim', { direction }) }} onSelect={direction => { if (myTurn) socket.emit('game:move', { direction }) }}/>}
+      {myRole && <CameraInput immersive role={myRole} mode={room.mode} round={room.round} targetDirection={myRole === 'Dodger' && room.turnPhase === 'dodger' ? room.aimDirection : null} manualDirection={manualDirection} active={myTurn && !room.submitted.includes(socket.id!)} locked={room.submitted.includes(socket.id!)} onPreview={direction => { if (myRole === 'Pointer' && myTurn) socket.emit('game:aim', { direction }) }} onSelect={direction => { if (myTurn) socket.emit('game:move', { direction }) }}/>} 
       {myRole && <div className="turn-instruction"><b>{myTurn ? (myRole === 'Pointer' ? 'YOUR TURN: POINT' : 'YOUR TURN: DODGE') : 'OPPONENT TURN'}</b><span>{myTurn ? (myRole === 'Pointer' ? 'Aim your hand in one direction, or use a button.' : room.aimDirection ? `Move your head ${arrows[room.aimDirection]} opposite to escape.` : 'Choose the exact opposite direction, or use a button.') : 'Watch the round. Your controls will activate when your phase begins.'}</span><small>Camera is optional — use the direction buttons when your phase is active.</small></div>}
       {myRole && <div className="manual-label">CAMERA AUTO-INPUT · TAP A DIRECTION IF NEEDED</div>}
-      {myRole && myTurn && !room.submitted.includes(socket.id!) && <div className="direction-pad" style={{ '--cols': MODES[room.mode].count === 2 ? 2 : 3 } as React.CSSProperties}>{MODES[room.mode].directions.map(d => <button key={d} className="direction-button" disabled={inCountdown} onClick={() => { if (inCountdown) return; if (myRole === 'Pointer') socket.emit('game:aim', { direction: d }); socket.emit('game:move', { direction: d }) }}><span>{arrows[d]}</span><small>{d.replace('-', ' ')}</small></button>)}</div>}
+      {myRole && myTurn && !room.submitted.includes(socket.id!) && <div className="direction-pad" style={{ '--cols': MODES[room.mode].count === 2 ? 2 : 3 } as React.CSSProperties}>{MODES[room.mode].directions.map(d => <button key={d} className="direction-button" disabled={inCountdown} onClick={() => { if (inCountdown) return; setManualDirection(d); if (myRole === 'Pointer') socket.emit('game:aim', { direction: d }); socket.emit('game:move', { direction: d }) }}><span>{arrows[d]}</span><small>{d.replace('-', ' ')}</small></button>)}</div>}
       {myRole && room.submitted.includes(socket.id!) && <p className="waiting"><span className="spinner"/> Locked in. Waiting for the other player…</p>}
       {!myRole && room.status === 'playing' && <p className="waiting">Your turn is coming up. Stay sharp.</p>}</>}
       {room.status === 'lobby' && <div className="how-to"><div className="how-mark">✳</div><h3>HOW TO PLAY</h3><p>Roles rotate automatically. Move your hand or head, or use the buttons. It is a quick body break with friends: the Pointer aims, the Dodger reacts in the exact opposite direction.</p><div className="lives-key">♥ <span>3 LIVES EACH · MOVE, RESET, PLAY AGAIN</span></div></div>}
