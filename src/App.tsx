@@ -74,6 +74,12 @@ export default function App() {
     void (async () => { if (!(await prepareCamera()) || !connect()) return; setBusy(true); socket.emit('room:join', { name: name.trim(), code: code.trim().toUpperCase() }) })()
   }
   const leaveRoom = () => { socket.emit('room:leave'); setRoom(null); setNotice(null) }
+  const playAgain = () => {
+    socket.emit('room:leave')
+    setRoom(null)
+    setNotice(null)
+    window.setTimeout(() => quickPlay(), 150)
+  }
   const saveServer = () => {
     const value = serverUrl.trim().replace(/\/+$/, '')
     if (value) {
@@ -114,15 +120,16 @@ export default function App() {
       {room.status === 'playing' && <div className="round-banner"><span>ROUND {room.round}</span>{room.countdownEndsAt && room.countdownEndsAt > Date.now() ? 'GET READY…' : 'MAKE YOUR MOVE'}</div>}
       </div><div className="panel game-panel"><div className="game-top"><span>{room.status === 'lobby' ? 'PLAYER LINEUP' : `ROUND ${room.round}`}</span><span className="live-pill">{room.status === 'playing' ? '● LIVE' : room.status === 'finished' ? '● FINISHED' : '● LOBBY'}</span></div>
       <div className="rank-line" aria-label="Player standings">{[...room.players].sort((a, b) => b.lives - a.lives).map((p, i) => <div className={`rank-player ${p.id === socket.id ? 'is-you' : ''} ${p.lives === 0 ? 'is-out' : ''}`} key={p.id}><span className="rank-number">#{i + 1}</span><span className={`player-avatar avatar-${room.players.indexOf(p) % 4}`}>{p.name.slice(0,1).toUpperCase()}</span><span className="rank-name">{p.name}</span><span className="rank-hearts">{'♥'.repeat(p.lives)}</span></div>)}</div>
-      {room.status === 'playing' && <><div className="role-card"><div className="role-icon">{myRole === 'Pointer' ? '☝' : myRole === 'Dodger' ? '↗' : '◉'}</div><div><small>YOUR ROLE</small><strong>{myRole ?? 'SPECTATING'}</strong></div></div><div className="opponent">{myRole && <><span>{myRole === 'Pointer' ? 'YOUR DODGER' : 'YOUR POINTER'}</span><strong>{room.players.find(p => p.id === (myRole === 'Pointer' ? room.dodgerId : room.pointerId))?.name}</strong></>}</div>
+      {room.status === 'playing' && <><div className="role-card"><div className="role-icon">{myRole === 'Pointer' ? '☝' : myRole === 'Dodger' ? '↗' : '◉'}</div><div><small>YOUR ROLE THIS ROUND</small><strong>{myRole ?? 'SPECTATING'}</strong><span className="role-help">{myRole === 'Pointer' ? 'You point with your hand. Your opponent must dodge.' : myRole === 'Dodger' ? 'You dodge with your head. Move opposite the pointer.' : 'Watch the live round. Your turn is coming next.'}</span></div></div><div className="opponent">{myRole && <><span>{myRole === 'Pointer' ? 'YOUR DODGER' : 'YOUR POINTER'}</span><strong>{room.players.find(p => p.id === (myRole === 'Pointer' ? room.dodgerId : room.pointerId))?.name}</strong></>}</div>
       {room.result && <div className={`result-card ${room.result.caught ? 'caught' : 'dodged'}`}><strong>{room.result.message}</strong><span>Point: {arrows[room.result.pointerDirection]} &nbsp; Dodge: {arrows[room.result.dodgeDirection]}</span></div>}
       {myRole && <CameraInput immersive autoStart role={myRole} mode={room.mode} round={room.round} targetDirection={room.aimDirection} active={!room.submitted.includes(socket.id!) && (!room.countdownEndsAt || room.countdownEndsAt <= Date.now())} locked={room.submitted.includes(socket.id!)} onPreview={direction => { if (myRole === 'Pointer') socket.emit('game:aim', { direction }) }} onSelect={direction => socket.emit('game:move', { direction })}/>}
+      {myRole && <div className="turn-instruction"><b>{myRole === 'Pointer' ? 'YOUR TURN: POINT' : 'YOUR TURN: DODGE'}</b><span>{myRole === 'Pointer' ? 'Aim your hand in one direction. The other player sees your target.' : room.aimDirection ? `Move your head ${arrows[room.aimDirection]} opposite to escape.` : 'Wait for the pointer’s target, then move your head the opposite way.'}</span></div>}
       {myRole && <div className="manual-label">CAMERA AUTO-INPUT · TAP A DIRECTION IF NEEDED</div>}
       {myRole && !room.submitted.includes(socket.id!) && (!room.countdownEndsAt || room.countdownEndsAt <= Date.now()) && <div className="direction-pad" style={{ '--cols': MODES[room.mode].count === 2 ? 2 : 3 } as React.CSSProperties}>{MODES[room.mode].directions.map(d => <button key={d} className="direction-button" onClick={() => { if (myRole === 'Pointer') socket.emit('game:aim', { direction: d }); socket.emit('game:move', { direction: d }) }}><span>{arrows[d]}</span><small>{d.replace('-', ' ')}</small></button>)}</div>}
       {myRole && room.submitted.includes(socket.id!) && <p className="waiting"><span className="spinner"/> Locked in. Waiting for the other player…</p>}
       {!myRole && room.status === 'playing' && <p className="waiting">Your turn is coming up. Stay sharp.</p>}</>}
       {room.status === 'lobby' && <div className="how-to"><div className="how-mark">✳</div><h3>HOW TO PLAY</h3><p>Roles rotate automatically. The Pointer aims with a hand; the Dodger moves their head in the exact opposite direction. Any other direction is caught.</p><div className="lives-key">♥ <span>3 LIVES EACH</span></div></div>}
-      {room.status === 'finished' && <div className="how-to"><div className="how-mark">🏆</div><h3>{room.winnerId === socket.id ? 'VICTORY' : `${room.players.find(p => p.id === room.winnerId)?.name ?? 'A player'} WINS`}</h3><p>Last player standing.</p><button className="button primary full" onClick={leaveRoom}>BACK TO HOME</button></div>}
+      {room.status === 'finished' && <div className="how-to"><div className="how-mark">🏆</div><h3>{room.winnerId === socket.id ? 'VICTORY' : `${room.players.find(p => p.id === room.winnerId)?.name ?? 'A player'} WINS`}</h3><p>Last player standing. Start a fresh match with the same mode.</p><button className="button primary full" onClick={playAgain}>PLAY AGAIN</button><button className="button secondary full" onClick={leaveRoom}>BACK TO HOME</button></div>}
       </div></div></section>}
     {room?.status === 'playing' && myRole && <div className="arena-status"><span>ROUND {room.round} · {myRole.toUpperCase()}</span><strong>{myRole === 'Pointer' ? 'POINT TO TAG' : room.aimDirection ? `DODGE ${arrows[room.aimDirection]} OPPOSITE` : 'WAIT FOR THE POINT'}</strong><span>{room.players.filter(p => p.lives > 0).length} PLAYERS LEFT</span></div>}
   </main>
