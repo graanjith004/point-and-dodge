@@ -93,6 +93,7 @@ function beginTurn(room: GameRoom) {
   room.turnTimer = setTimeout(() => {
     if (room.status !== 'playing' || room.turnPhase !== 'pointer' || room.pointerId !== pointer.id || room.dodgerId !== dodger.id) return
     room.picks[pointer.id] = room.picks[pointer.id] ?? (MODES[room.mode].directions as readonly Direction[])[randomInt(MODES[room.mode].directions.length)]
+    pointer.lives = Math.max(0, pointer.lives - 1)
     room.submitted = [pointer.id]; room.turnPhase = 'dodger'; room.countdownEndsAt = Date.now(); publish(room)
     room.turnTimer = setTimeout(() => { if (room.status === 'playing' && room.turnPhase === 'dodger') { room.picks[dodger.id] = room.picks[dodger.id] ?? room.picks[pointer.id]; resolveTurn(room, [pointer.id, dodger.id]) } }, roundMs)
   }, 3_000 + roundMs)
