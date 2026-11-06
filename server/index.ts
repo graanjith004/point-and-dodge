@@ -92,26 +92,25 @@ function beginTurn(room: GameRoom) {
   }, 3_000)
   room.turnTimer = setTimeout(() => {
     if (room.status !== 'playing' || room.turnPhase !== 'pointer' || room.pointerId !== pointer.id || room.dodgerId !== dodger.id) return
-    room.picks[pointer.id] = room.picks[pointer.id] ?? (MODES[room.mode].directions as readonly Direction[])[randomInt(MODES[room.mode].directions.length)]
     pointer.lives = Math.max(0, pointer.lives - 1)
-    room.submitted = [pointer.id]; room.turnPhase = 'dodger'; room.countdownEndsAt = Date.now(); publish(room)
-    room.turnTimer = setTimeout(() => { if (room.status === 'playing' && room.turnPhase === 'dodger') { room.picks[dodger.id] = room.picks[dodger.id] ?? room.picks[pointer.id]; resolveTurn(room, [pointer.id, dodger.id]) } }, roundMs)
+    resolveTurn(room, [pointer.id])
   }, 3_000 + roundMs)
 }
 function resolveTurn(room: GameRoom, timedOut: string[] = []) {
   if (room.turnTimer) clearTimeout(room.turnTimer)
   const pointer = room.players.find(p => p.id === room.pointerId)
   const dodger = room.players.find(p => p.id === room.dodgerId)
-  if (!pointer || !dodger || !room.picks[pointer.id] || !room.picks[dodger.id]) return
+  if (!pointer || !dodger || !room.picks[pointer.id]) return
   const pointerTimedOut = timedOut.includes(pointer.id)
   const dodgerTimedOut = timedOut.includes(dodger.id)
   const neutralTimeout = pointerTimedOut && dodgerTimedOut
-  const caught = !neutralTimeout && (dodgerTimedOut || room.picks[dodger.id] !== oppositeDirection[room.picks[pointer.id]])
+  const dodgeDirection = room.picks[dodger.id]
+  const caught = !neutralTimeout && (dodgerTimedOut || !dodgeDirection || dodgeDirection !== oppositeDirection[room.picks[pointer.id]])
   if (caught) { pointer.score += 2; dodger.lives = Math.max(0, dodger.lives - 1); room.streak = 0 }
   else if (!neutralTimeout) { dodger.score += 1; room.streak += 1; if (room.streak === 3) { dodger.score += 2; room.streak = 0 } }
   const message = neutralTimeout ? 'Both players timed out — no life lost.' : pointerTimedOut ? `${dodger.name} wins the exchange — pointer timed out.` : dodgerTimedOut ? `${dodger.name} timed out and was caught!` : caught ? `${dodger.name} was caught!` : `${dodger.name} dodged it!`
   room.turnPhase = 'result'
-  room.result = { pointerDirection: room.picks[pointer.id], dodgeDirection: room.picks[dodger.id], caught, message, timedOut }
+  room.result = { pointerDirection: room.picks[pointer.id], dodgeDirection: dodgeDirection ?? 'NONE', caught, message, timedOut }
   room.submitted = [pointer.id, dodger.id]; room.countdownEndsAt = null
   publish(room)
   room.nextTimer = setTimeout(() => {

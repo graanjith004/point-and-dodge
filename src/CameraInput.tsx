@@ -199,11 +199,7 @@ export default function CameraInput({ role, mode, round, active, locked, demo = 
           const stableAim = props.active && !props.locked && next && now - candidateAt >= 180 ? next : null
           if (stableAim !== previewSent) { previewSent = stableAim; props.onPreview?.(stableAim) }
         }
-        if (next && props.active && !props.locked && sentRound !== props.round && now - candidateAt >= 700) {
-          sentRound = props.round
-          props.onSelect(next)
-          setHint(`${words[next]} locked in. Your camera stays on for the next turn.`)
-        }
+        if (next && props.active && !props.locked && sentRound !== props.round && now - candidateAt >= 700) setHint(`${words[next]} detected. Press CONFIRM to submit.`)
       }
       frameRef.current = requestAnimationFrame(loop)
     } catch (cause) {
@@ -227,12 +223,12 @@ export default function CameraInput({ role, mode, round, active, locked, demo = 
     <div className={`camera-preview ${state === 'off' || state === 'error' ? 'camera-empty' : ''}`}>
       <video ref={videoRef} muted playsInline aria-label="Live camera preview" className={streamRef.current ? '' : 'video-hidden'}/>
       {(!streamRef.current || state === 'error') && <div className={`camera-placeholder ${avatarEnabled ? `emoji-avatar ${manualDirection ? `move-${manualDirection.toLowerCase()}` : ''}` : 'avatar-hidden'}`}><span className="emoji-person">{avatarEnabled ? '🧍' : '☝'}</span><small>{avatarEnabled ? (manualDirection ? `MOVING ${words[manualDirection]}` : 'AVATAR READY') : 'CAMERA OFF · BUTTONS READY'}</small></div>}
-      {state !== 'off' && state !== 'error' && <div className="camera-overlay">↑<span>← ＋ →</span>↓</div>}
+      {state !== 'off' && state !== 'error' && <div className="camera-overlay">TRACKING<span>↑ · ← · → · ↓</span></div>}
       {role === 'Dodger' && targetDirection && <div className="camera-target"><span>THE POINT</span><strong>{symbols[targetDirection]}</strong><b>DODGE OPPOSITE</b></div>}
       {prediction && <div className="camera-prediction"><b>{symbols[prediction]}</b> {words[prediction]}</div>}
     </div>
     <div className="camera-controls"><p className={state === 'error' ? 'camera-error' : ''}>{error || hint || (state === 'off' ? role === 'Pointer' ? 'Camera stays off until you turn it on.' : 'Look straight at the camera to calibrate, then move your head.' : '')}</p>
-      {state === 'off' || state === 'error' ? <div className="camera-choice"><button className="camera-button" disabled={busy} onClick={startCamera}>{busy ? <><span className="spinner"/> STARTING CAMERA</> : <>USE CAMERA <span>↗</span></>}</button><button className="avatar-toggle" onClick={() => setAvatarEnabled(value => !value)}>{avatarEnabled ? 'HIDE AVATAR' : 'USE AVATAR'}</button></div> : <button className="camera-button stop" onClick={stopCamera}>TURN CAMERA OFF <span>×</span></button>}
+      {state === 'off' || state === 'error' ? <div className="camera-choice"><button className="camera-button" disabled={busy} onClick={startCamera}>{busy ? <><span className="spinner"/> STARTING CAMERA</> : <>USE CAMERA <span>↗</span></>}</button><button className="avatar-toggle" onClick={() => setAvatarEnabled(value => !value)}>{avatarEnabled ? 'HIDE AVATAR' : 'USE AVATAR'}</button></div> : <div className="camera-choice"><button className="camera-button confirm" disabled={!prediction || !active || locked} onClick={() => { if (!prediction) return; onSelect(prediction); setHint(`${words[prediction]} confirmed.`) }}>CONFIRM {prediction ? words[prediction] : 'MOVE'} <span>✓</span></button><button className="camera-button stop" onClick={stopCamera}>TURN CAMERA OFF <span>×</span></button></div>}
     </div>
     <div className="camera-privacy">{demo ? 'CAMERA TRYOUT · NO GAME MOVE WILL BE SENT' : avatarEnabled ? 'CAMERA OPTIONAL · USE THE AVATAR IF YOU PREFER PRIVACY.' : 'CAMERA OFF · MANUAL BUTTONS ARE READY.'}</div>
   </div>
