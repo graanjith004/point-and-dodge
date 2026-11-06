@@ -11,7 +11,7 @@ export type RoomView = {
   code: string; mode: Mode; status: 'lobby' | 'playing' | 'finished'; players: Player[]; hostId: string; publicMatch?: boolean
   round: number; pointerId: string | null; dodgerId: string | null; submitted: string[]
   aimDirection: Direction | null
-  result: { pointerDirection: string; dodgeDirection: string; caught: boolean; message: string } | null
+  result: { pointerDirection: string; dodgeDirection: string; caught: boolean; message: string; timedOut?: string[] } | null
   winnerId: string | null; countdownEndsAt: number | null
 }
 

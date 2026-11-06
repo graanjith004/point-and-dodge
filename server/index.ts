@@ -91,12 +91,13 @@ function beginTurn(room: GameRoom) {
   room.turnTimer = setTimeout(() => {
     if (room.status !== 'playing' || room.pointerId !== pointer.id || room.dodgerId !== dodger.id) return
     const allowed = MODES[room.mode].directions as readonly Direction[]
-    if (!room.picks[pointer.id]) room.picks[pointer.id] = allowed[randomInt(allowed.length)]
-    if (!room.picks[dodger.id]) room.picks[dodger.id] = allowed[randomInt(allowed.length)]
-    resolveTurn(room)
+    const timedOut: string[] = []
+    if (!room.picks[pointer.id]) { room.picks[pointer.id] = allowed[randomInt(allowed.length)]; timedOut.push(pointer.id) }
+    if (!room.picks[dodger.id]) { room.picks[dodger.id] = allowed[randomInt(allowed.length)]; timedOut.push(dodger.id) }
+    resolveTurn(room, timedOut)
   }, 3_000 + roundMs)
 }
-function resolveTurn(room: GameRoom) {
+function resolveTurn(room: GameRoom, timedOut: string[] = []) {
   if (room.turnTimer) clearTimeout(room.turnTimer)
   const pointer = room.players.find(p => p.id === room.pointerId)
   const dodger = room.players.find(p => p.id === room.dodgerId)
@@ -104,7 +105,7 @@ function resolveTurn(room: GameRoom) {
   const caught = room.picks[dodger.id] !== oppositeDirection[room.picks[pointer.id]]
   if (caught) { pointer.score += 2; dodger.lives = Math.max(0, dodger.lives - 1); room.streak = 0 }
   else { dodger.score += 1; room.streak += 1; if (room.streak === 3) { dodger.score += 2; room.streak = 0 } }
-  room.result = { pointerDirection: room.picks[pointer.id], dodgeDirection: room.picks[dodger.id], caught, message: caught ? `${dodger.name} was caught!` : `${dodger.name} dodged it!` }
+  room.result = { pointerDirection: room.picks[pointer.id], dodgeDirection: room.picks[dodger.id], caught, message: caught ? `${dodger.name} was caught!` : `${dodger.name} dodged it!`, timedOut }
   room.submitted = [pointer.id, dodger.id]; room.countdownEndsAt = null
   publish(room)
   room.nextTimer = setTimeout(() => {

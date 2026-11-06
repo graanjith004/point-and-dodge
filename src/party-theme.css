@@ -30,3 +30,24 @@ body{min-height:100vh;background:radial-gradient(ellipse at 50% -20%,#292c49 0,#
 .camera-immersive~.direction-pad{position:fixed;z-index:110;right:calc(env(safe-area-inset-right,0px) + 16px);bottom:calc(env(safe-area-inset-bottom,0px) + 16px);width:min(40vw,340px);gap:6px;margin:0;padding:8px;border:1px solid #ffffff28;border-radius:16px;background:#101322c9;backdrop-filter:blur(12px)}.camera-immersive~.direction-pad .direction-button{min-height:clamp(48px,8vh,72px);border-radius:12px}.camera-immersive~.direction-pad .direction-button small{font-size:8px}.camera-immersive~.manual-label{position:fixed;z-index:111;right:calc(env(safe-area-inset-right,0px) + 20px);bottom:calc(env(safe-area-inset-bottom,0px) + 16px + min(40vw,340px) * .45);width:min(40vw,340px);margin:0;text-align:center;color:#f3f5ff;font-size:8px;text-shadow:0 2px 4px #000}
 @media(max-width:620px){.camera-immersive .camera-heading{top:calc(env(safe-area-inset-top,0px) + 12px);left:12px;padding:8px 10px}.camera-immersive .camera-heading strong{font-size:15px}.arena-status{top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;padding:8px 9px;max-width:48vw}.arena-status strong{font-size:9px}.camera-immersive .camera-controls{left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);max-width:46vw;display:grid;align-items:end;gap:6px}.camera-immersive .camera-controls p{font-size:10px;padding:8px}.camera-immersive .camera-button{min-width:0;width:100%;min-height:44px;font-size:9px}.camera-immersive~.direction-pad{right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);width:min(43vw,220px);gap:4px;padding:6px}.camera-immersive~.direction-pad .direction-button{min-height:clamp(43px,7vh,58px);border-radius:10px}.camera-immersive~.direction-pad .direction-button small{font-size:7px}.camera-immersive~.manual-label{right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px + min(43vw,220px) * .45);width:min(43vw,220px);font-size:7px}.camera-immersive .camera-target{top:calc(env(safe-area-inset-top,0px) + 92px);min-width:116px;padding:8px 14px}.camera-immersive .camera-target strong{font-size:42px}}
 .android-preview-note label{display:block;margin-top:10px;font:700 8px 'DM Mono',monospace;letter-spacing:.8px;color:#c5cbe0}.server-url-row{display:flex;gap:6px;margin-top:6px}.server-url-row input{flex:1;min-width:0;background:#1b2033;border:1px solid #424b66;border-radius:8px;color:#f3f5ff;padding:10px;font-size:11px}.server-url-row input::placeholder{color:#848da8}.server-url-row button{border:0;border-radius:8px;background:#ffd05a;color:#192039;padding:0 12px;font:700 9px 'DM Mono',monospace}.android-preview-note.server-configured{border-left-color:#65e0b1}.android-preview-note.server-configured span{color:#65e0b1}
+
+/* Round feedback: lives, caught/dodged overlay, round log, no-camera buttons */
+.my-status{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0 0;padding:14px 16px;border-radius:16px;background:#1f2a44;border:1px solid #3c4d7a}
+.my-status small{display:block;font:9px 'DM Mono',monospace;letter-spacing:1px;color:#b8c0d8}
+.my-status strong{font:800 20px 'Barlow Condensed',sans-serif;color:#f3f5ff}
+.my-lives{display:flex;align-items:center;gap:4px}
+.my-lives span{font-size:24px;line-height:1}
+.my-lives .on{color:#ff6f98}
+.my-lives .off{color:#3a4060}
+.my-lives em{font:700 10px 'DM Mono',monospace;font-style:normal;color:#ffd05a;margin-left:8px;letter-spacing:1px}
+.my-score{text-align:right}
+.round-overlay{position:fixed;top:36%;left:50%;width:min(92vw,460px);z-index:200;display:grid;justify-items:center;gap:6px;padding:20px 18px;border-radius:22px;text-align:center;box-shadow:0 20px 50px #000a;animation:roundPop .35s ease-out;pointer-events:none}
+.round-overlay strong{font:900 clamp(28px,6vw,40px)/1 'Barlow Condensed',sans-serif;letter-spacing:.5px}
+.round-overlay span{font:600 12px 'DM Mono',monospace;color:#f3f5ff}
+.round-overlay.caught{background:#7a1f3d;color:#fff}
+.round-overlay.dodged{background:#1d6b58;color:#fff}
+.round-overlay.hit{background:#8a6212;color:#fff}
+.round-overlay.neutral{background:#2a3150;color:#fff}
+@keyframes roundPop{0%{transform:translateX(-50%) scale(.7);opacity:0}70%{transform:translateX(-50%) scale(1.04);opacity:1}100%{transform:translateX(-50%) scale(1)}}
+.round-log{margin-top:14px;padding:10px 12px;border-radius:12px;background:#171c2d;border:1px solid #2f3852;font:10px 'DM Mono',monospace;color:#c9cfe2;display:grid;gap:5px}
+.direction-button:disabled{opacity:.45;cursor:not-allowed;transform:none}
