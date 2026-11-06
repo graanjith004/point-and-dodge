@@ -45,7 +45,7 @@ function view(room: GameRoom, recipientId?: string): RoomView {
   const { picks: _picks, turnIndex: _turn, streak: _streak, turnTimer: _timer, nextTimer: _next, fillTimer: _fill, public: isPublic, ...safe } = room
   safe.publicMatch = isPublic
   // Never reveal the Pointer's live aim to the Dodger before both moves are locked.
-  if (recipientId === room.dodgerId && room.status === 'playing' && !room.result) safe.aimDirection = null
+  if (recipientId === room.dodgerId && room.status === 'playing' && room.turnPhase === 'pointer' && !room.result) safe.aimDirection = null
   return safe
 }
 function publish(room: GameRoom) { for (const player of room.players) io.to(player.id).emit('room:update', view(room, player.id)) }
@@ -60,7 +60,7 @@ function attach(room: GameRoom, socket: Socket, name: string) {
 function newRoom(socket: Socket, name: string, mode: Mode, isPublic: boolean) {
   let roomCode = code()
   while (rooms.has(roomCode)) roomCode = code()
-  const room: GameRoom = { code: roomCode, mode, status: 'lobby', players: [makePlayer(socket.id, name)], hostId: socket.id, round: 0, pointerId: null, dodgerId: null, submitted: [], aimDirection: null, result: null, winnerId: null, countdownEndsAt: null, public: isPublic, picks: {}, turnIndex: 0, streak: 0 }
+  const room: GameRoom = { code: roomCode, mode, status: 'lobby', players: [makePlayer(socket.id, name)], hostId: socket.id, round: 0, pointerId: null, dodgerId: null, submitted: [], turnPhase: null, aimDirection: null, result: null, winnerId: null, countdownEndsAt: null, public: isPublic, picks: {}, turnIndex: 0, streak: 0 }
   rooms.set(roomCode, room); socket.join(roomCode); socketRoom.set(socket.id, roomCode)
   socket.emit('room:joined', roomCode); publish(room)
   return room
@@ -82,7 +82,7 @@ function beginTurn(room: GameRoom) {
   const pointer = active[room.turnIndex % active.length]
   const dodger = active[(room.turnIndex + 1) % active.length]
   room.round += 1; room.pointerId = pointer.id; room.dodgerId = dodger.id
-  room.submitted = []; room.picks = {}; room.aimDirection = null; room.countdownEndsAt = Date.now() + 3_000; room.result = null
+  room.submitted = []; room.picks = {}; room.turnPhase = 'pointer'; room.aimDirection = null; room.countdownEndsAt = Date.now() + 3_000; room.result = null
   publish(room)
   setTimeout(() => {
     if (room.status === 'playing' && room.pointerId === pointer.id && room.dodgerId === dodger.id) {
@@ -91,21 +91,10 @@ function beginTurn(room: GameRoom) {
     }
   }, 3_000)
   room.turnTimer = setTimeout(() => {
-    if (room.status !== 'playing' || room.pointerId !== pointer.id || room.dodgerId !== dodger.id) return
-    const timedOut: string[] = []
-    if (!room.picks[pointer.id]) timedOut.push(pointer.id)
-    if (!room.picks[dodger.id]) timedOut.push(dodger.id)
-    // A missing move is resolved by role: pointer timeout awards the exchange
-    // to the dodger; dodger timeout is an automatic catch. Both timeouts are neutral.
-    if (timedOut.length === 2) {
-      room.picks[pointer.id] = room.picks[pointer.id] ?? 'LEFT'
-      room.picks[dodger.id] = room.picks[dodger.id] ?? 'LEFT'
-    } else if (timedOut[0] === pointer.id) {
-      room.picks[pointer.id] = room.picks[pointer.id] ?? oppositeDirection[room.picks[dodger.id] ?? 'RIGHT']
-    } else if (timedOut[0] === dodger.id) {
-      room.picks[dodger.id] = room.picks[dodger.id] ?? room.picks[pointer.id] ?? 'LEFT'
-    }
-    resolveTurn(room, timedOut)
+    if (room.status !== 'playing' || room.turnPhase !== 'pointer' || room.pointerId !== pointer.id || room.dodgerId !== dodger.id) return
+    room.picks[pointer.id] = room.picks[pointer.id] ?? (MODES[room.mode].directions as readonly Direction[])[randomInt(MODES[room.mode].directions.length)]
+    room.submitted = [pointer.id]; room.turnPhase = 'dodger'; room.countdownEndsAt = Date.now(); publish(room)
+    room.turnTimer = setTimeout(() => { if (room.status === 'playing' && room.turnPhase === 'dodger') { room.picks[dodger.id] = room.picks[dodger.id] ?? room.picks[pointer.id]; resolveTurn(room, [pointer.id, dodger.id]) } }, roundMs)
   }, 3_000 + roundMs)
 }
 function resolveTurn(room: GameRoom, timedOut: string[] = []) {
@@ -120,6 +109,7 @@ function resolveTurn(room: GameRoom, timedOut: string[] = []) {
   if (caught) { pointer.score += 2; dodger.lives = Math.max(0, dodger.lives - 1); room.streak = 0 }
   else if (!neutralTimeout) { dodger.score += 1; room.streak += 1; if (room.streak === 3) { dodger.score += 2; room.streak = 0 } }
   const message = neutralTimeout ? 'Both players timed out — no life lost.' : pointerTimedOut ? `${dodger.name} wins the exchange — pointer timed out.` : dodgerTimedOut ? `${dodger.name} timed out and was caught!` : caught ? `${dodger.name} was caught!` : `${dodger.name} dodged it!`
+  room.turnPhase = 'result'
   room.result = { pointerDirection: room.picks[pointer.id], dodgeDirection: room.picks[dodger.id], caught, message, timedOut }
   room.submitted = [pointer.id, dodger.id]; room.countdownEndsAt = null
   publish(room)
@@ -207,15 +197,21 @@ io.on('connection', socket => {
     const allowed = MODES[room.mode].directions as readonly string[]
     if (typeof data?.direction !== 'string' || !allowed.includes(data.direction)) { socket.emit('room:error', 'That direction is not available in this mode.'); return }
     if (Date.now() < (room.countdownEndsAt ?? 0)) { socket.emit('room:error', 'Wait for the countdown to finish.'); return }
-    if (![room.pointerId, room.dodgerId].includes(socket.id) || room.picks[socket.id]) return
+    if (room.turnPhase === 'pointer' && socket.id !== room.pointerId) { socket.emit('room:error', 'Opponent turn: wait for the Pointer.'); return }
+    if (room.turnPhase === 'dodger' && socket.id !== room.dodgerId) { socket.emit('room:error', 'Opponent turn: wait for the Dodger.'); return }
+    if (!['pointer', 'dodger'].includes(room.turnPhase ?? '') || room.picks[socket.id]) return
     room.picks[socket.id] = data.direction as Direction
     if (socket.id === room.pointerId) room.aimDirection = data.direction as Direction
     room.submitted.push(socket.id); publish(room)
-    if (room.picks[room.pointerId] && room.picks[room.dodgerId]) resolveTurn(room)
+    if (socket.id === room.pointerId) {
+      room.turnPhase = 'dodger'; room.countdownEndsAt = Date.now(); publish(room)
+      if (room.turnTimer) clearTimeout(room.turnTimer)
+      room.turnTimer = setTimeout(() => { if (room.status === 'playing' && room.turnPhase === 'dodger') { room.picks[room.dodgerId!] = room.picks[room.dodgerId!] ?? room.picks[room.pointerId!]; resolveTurn(room, [room.dodgerId!]) } }, roundMs)
+    } else if (room.picks[room.pointerId]) resolveTurn(room)
   })
   socket.on('game:aim', (data: { direction?: unknown }) => {
     const room = getRoom(socket)
-    if (!room || room.status !== 'playing' || room.pointerId !== socket.id || room.picks[socket.id] || Date.now() < (room.countdownEndsAt ?? 0)) return
+    if (!room || room.status !== 'playing' || room.turnPhase !== 'pointer' || room.pointerId !== socket.id || room.picks[socket.id] || Date.now() < (room.countdownEndsAt ?? 0)) return
     const allowed = MODES[room.mode].directions as readonly string[]
     const direction = data?.direction
     if (direction !== null && (typeof direction !== 'string' || !allowed.includes(direction))) return
