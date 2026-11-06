@@ -45,6 +45,7 @@ export default function CameraInput({ role, mode, round, active, locked, demo = 
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
   const [prediction, setPrediction] = useState<Direction | null>(null)
+  const [avatarEnabled, setAvatarEnabled] = useState(true)
 
   inputsRef.current = { role, mode, round, active, locked, onPreview, onSelect }
 
@@ -225,14 +226,14 @@ export default function CameraInput({ role, mode, round, active, locked, demo = 
     <div className="camera-heading"><div><span className="camera-kicker">CAMERA {state === 'ready' ? 'ACTIVE' : state === 'calibrating' ? 'CALIBRATING' : 'INPUT'}</span><strong>{role === 'Pointer' ? 'Point with your finger' : 'Dodge with your head'}</strong></div><span className={`camera-light ${state === 'ready' ? 'active' : ''}`}/></div>
     <div className={`camera-preview ${state === 'off' || state === 'error' ? 'camera-empty' : ''}`}>
       <video ref={videoRef} muted playsInline aria-label="Live camera preview" className={streamRef.current ? '' : 'video-hidden'}/>
-      {(!streamRef.current || state === 'error') && <div className={`camera-placeholder emoji-avatar ${manualDirection ? `move-${manualDirection.toLowerCase()}` : ''}`}><span className="emoji-person">🧍</span><small>{manualDirection ? `MOVING ${words[manualDirection]}` : 'CHOOSE A DIRECTION'}</small></div>}
+      {(!streamRef.current || state === 'error') && <div className={`camera-placeholder ${avatarEnabled ? `emoji-avatar ${manualDirection ? `move-${manualDirection.toLowerCase()}` : ''}` : 'avatar-hidden'}`}><span className="emoji-person">{avatarEnabled ? '🧍' : '☝'}</span><small>{avatarEnabled ? (manualDirection ? `MOVING ${words[manualDirection]}` : 'AVATAR READY') : 'CAMERA OFF · BUTTONS READY'}</small></div>}
       {state !== 'off' && state !== 'error' && <div className="camera-overlay">↑<span>← ＋ →</span>↓</div>}
       {role === 'Dodger' && targetDirection && <div className="camera-target"><span>THE POINT</span><strong>{symbols[targetDirection]}</strong><b>DODGE OPPOSITE</b></div>}
       {prediction && <div className="camera-prediction"><b>{symbols[prediction]}</b> {words[prediction]}</div>}
     </div>
     <div className="camera-controls"><p className={state === 'error' ? 'camera-error' : ''}>{error || hint || (state === 'off' ? role === 'Pointer' ? 'Camera stays off until you turn it on.' : 'Look straight at the camera to calibrate, then move your head.' : '')}</p>
-      {state === 'off' || state === 'error' ? <button className="camera-button" disabled={busy} onClick={startCamera}>{busy ? <><span className="spinner"/> STARTING CAMERA</> : <>ENABLE CAMERA <span>↗</span></>}</button> : <button className="camera-button stop" onClick={stopCamera}>TURN CAMERA OFF <span>×</span></button>}
+      {state === 'off' || state === 'error' ? <div className="camera-choice"><button className="camera-button" disabled={busy} onClick={startCamera}>{busy ? <><span className="spinner"/> STARTING CAMERA</> : <>USE CAMERA <span>↗</span></>}</button><button className="avatar-toggle" onClick={() => setAvatarEnabled(value => !value)}>{avatarEnabled ? 'HIDE AVATAR' : 'USE AVATAR'}</button></div> : <button className="camera-button stop" onClick={stopCamera}>TURN CAMERA OFF <span>×</span></button>}
     </div>
-    <div className="camera-privacy">{demo ? 'CAMERA TRYOUT · NO GAME MOVE WILL BE SENT' : 'VIDEO IS PROCESSED ON THIS DEVICE. ONLY YOUR SELECTED DIRECTION IS SENT TO THE GAME.'}</div>
+    <div className="camera-privacy">{demo ? 'CAMERA TRYOUT · NO GAME MOVE WILL BE SENT' : avatarEnabled ? 'CAMERA OPTIONAL · USE THE AVATAR IF YOU PREFER PRIVACY.' : 'CAMERA OFF · MANUAL BUTTONS ARE READY.'}</div>
   </div>
 }
