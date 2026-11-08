@@ -3,7 +3,7 @@ import { FaceLandmarker, FilesetResolver, HandLandmarker } from '@mediapipe/task
 import type { Direction, Mode } from '../shared/game'
 
 type Role = 'Pointer' | 'Dodger'
-type Props = { role: Role; mode: Mode; round: number; active: boolean; locked: boolean; demo?: boolean; immersive?: boolean; autoStart?: boolean; targetDirection?: Direction | null; manualDirection?: Direction | null; onPreview?: (direction: Direction | null) => void; onSelect: (direction: Direction) => void }
+type Props = { role: Role; mode: Mode; round: number; active: boolean; locked: boolean; demo?: boolean; immersive?: boolean; autoStart?: boolean; targetDirection?: Direction | null; manualDirection?: Direction | null; onPreview?: (direction: Direction | null) => void; onSelect: (direction: Direction) => void; onTracking?: (tracking: boolean) => void }
 type Landmark = { x: number; y: number; z?: number }
 type Task = FaceLandmarker | HandLandmarker
 type CameraState = 'off' | 'loading' | 'calibrating' | 'ready' | 'error'
@@ -33,7 +33,7 @@ function taskOptions(model: string, delegate: 'GPU' | 'CPU') {
   return { baseOptions: { modelAssetPath: model, delegate }, runningMode: 'VIDEO' as const, numFaces: 1, numHands: 1, minFaceDetectionConfidence: 0.55, minFacePresenceConfidence: 0.55, minHandDetectionConfidence: 0.55, minHandPresenceConfidence: 0.55 }
 }
 
-export default function CameraInput({ role, mode, round, active, locked, demo = false, immersive = false, autoStart = false, targetDirection = null, manualDirection = null, onPreview, onSelect }: Props) {
+export default function CameraInput({ role, mode, round, active, locked, demo = false, immersive = false, autoStart = false, targetDirection = null, manualDirection = null, onPreview, onSelect, onTracking }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const taskRef = useRef<Task | null>(null)
@@ -101,7 +101,7 @@ export default function CameraInput({ role, mode, round, active, locked, demo = 
       if (operationRef.current !== operation) { task.close(); return }
       taskRef.current = task
       setState(role === 'Dodger' ? 'calibrating' : 'ready')
-      setHint(role === 'Pointer' ? 'Point your index finger. Your opponent sees the aim live.' : 'Hold still briefly. When the point appears, move your head the other way.')
+      setHint(role === 'Pointer' ? 'Point your index finger. Your opponent sees your direction once you confirm it.' : 'Hold still briefly. When the point appears, move your head the other way.')
 
       let lastTime = -1
       let lastFrameAt = 0
@@ -212,6 +212,9 @@ export default function CameraInput({ role, mode, round, active, locked, demo = 
       setError(message); setState('error'); setHint('')
     }
   }
+
+  // Tell the parent whether the camera is tracking, so manual buttons hide while the camera drives input.
+  useEffect(() => { onTracking?.(state === 'ready' || state === 'calibrating') }, [state, onTracking])
 
   useEffect(() => {
     if (!autoStart || autoStartedRef.current) return

@@ -37,10 +37,10 @@ export default function App() {
   }, [socket, isNative, serverConfigured])
 
   useEffect(() => {
-    if (room?.status !== 'playing' || !room.countdownEndsAt || room.countdownEndsAt <= Date.now()) return
+    if (room?.status !== 'playing' || !room.phaseEndsAt || room.phaseEndsAt <= Date.now()) return
     const timer = window.setInterval(() => setClock(Date.now()), 100)
     return () => window.clearInterval(timer)
-  }, [room?.status, room?.countdownEndsAt])
+  }, [room?.status, room?.phaseEndsAt, room?.countdownEndsAt])
 
   const connect = () => {
     if (isNative && !serverConfigured) {
@@ -99,6 +99,10 @@ export default function App() {
   const myTurn = Boolean(room?.turnPhase && ((myRole === 'Pointer' && room.turnPhase === 'pointer') || (myRole === 'Dodger' && room.turnPhase === 'dodger')))
   const me = room?.players.find(p => p.id === socket.id)
   const inCountdown = Boolean(room?.countdownEndsAt && room.countdownEndsAt > Date.now())
+  // Reported by CameraInput: manual buttons show only while this player's camera is not tracking.
+  const [cameraTracking, setCameraTracking] = useState(false)
+  const secondsLeft = room?.phaseEndsAt ? Math.max(0, Math.ceil((room.phaseEndsAt - Date.now()) / 1000)) : null
+  const showDir = (d: string) => d && d !== 'NONE' ? `${arrows[d]} ${d.replace('-', ' ')}` : '—'
   const [overlay, setOverlay] = useState<{ tone: 'hit' | 'caught' | 'dodged' | 'neutral'; title: string; detail: string; key: number } | null>(null)
   const [history, setHistory] = useState<string[]>([])
   const shownRound = useRef(0)
@@ -110,25 +114,27 @@ export default function App() {
     const r = room.result
     const role = room.pointerId === socket.id ? 'pointer' : room.dodgerId === socket.id ? 'dodger' : 'spectator'
     const dodgerName = room.players.find(p => p.id === room.dodgerId)?.name ?? 'Dodger'
-    const point = `${arrows[r.pointerDirection]} ${r.pointerDirection.replace('-', ' ')}`
-    const dodge = `${arrows[r.dodgeDirection]} ${r.dodgeDirection.replace('-', ' ')}`
-    const timedOut = socket.id ? (r.timedOut ?? []).includes(socket.id) : false
+    const point = showDir(r.pointerDirection)
+    const dodge = showDir(r.dodgeDirection)
+    const timedOutIds = r.timedOut ?? []
+    const pointerTimedOut = Boolean(room.pointerId && timedOutIds.includes(room.pointerId))
+    const dodgerTimedOut = Boolean(room.dodgerId && timedOutIds.includes(room.dodgerId))
     let tone: 'hit' | 'caught' | 'dodged' | 'neutral'
     let title: string
     let vibe: number | number[] = 0
     if (role === 'dodger') {
-      tone = r.caught ? 'caught' : 'dodged'
-      title = r.caught ? 'CAUGHT! −1 LIFE' : 'DODGED! +1 POINT'
-      vibe = r.caught ? [400, 120, 400] : 60
+      if (dodgerTimedOut) { tone = 'caught'; title = 'TIME RAN OUT! −1 LIFE'; vibe = [400, 120, 400] }
+      else if (pointerTimedOut) { tone = 'dodged'; title = 'POINTER TIMED OUT! +1 POINT'; vibe = 60 }
+      else { tone = r.caught ? 'caught' : 'dodged'; title = r.caught ? 'CAUGHT! −1 LIFE' : 'DODGED! +1 POINT'; vibe = r.caught ? [400, 120, 400] : 60 }
     } else if (role === 'pointer') {
-      tone = r.caught ? 'hit' : 'neutral'
-      title = r.caught ? 'HIT! +2 POINTS' : 'MISSED — THEY DODGED'
-      vibe = r.caught ? [80, 50, 80] : 0
+      if (pointerTimedOut) { tone = 'caught'; title = 'TIME RAN OUT! −1 LIFE'; vibe = [400, 120, 400] }
+      else if (dodgerTimedOut) { tone = 'hit'; title = 'DODGER TIMED OUT! +2 POINTS'; vibe = [80, 50, 80] }
+      else { tone = r.caught ? 'hit' : 'neutral'; title = r.caught ? 'HIT! +2 POINTS' : 'MISSED — THEY DODGED'; vibe = r.caught ? [80, 50, 80] : 0 }
     } else {
       tone = 'neutral'
-      title = r.caught ? `${dodgerName} WAS CAUGHT` : `${dodgerName} DODGED`
+      title = pointerTimedOut ? 'POINTER TIMED OUT' : dodgerTimedOut ? `${dodgerName} TIMED OUT` : r.caught ? `${dodgerName} WAS CAUGHT` : `${dodgerName} DODGED`
     }
-    const detail = `POINT ${point}  ·  DODGE ${dodge}${timedOut ? '  ·  TIME RAN OUT, RANDOM MOVE' : ''}`
+    const detail = pointerTimedOut ? 'POINTER RAN OUT OF TIME · NO POINT MADE' : dodgerTimedOut ? `POINT ${point}  ·  DODGER RAN OUT OF TIME` : `POINT ${point}  ·  DODGE ${dodge}`
     setOverlay({ tone, title, detail, key: Date.now() })
     setHistory(h => [`R${room.round}  ${r.caught ? 'CAUGHT' : 'DODGED'}  ·  ${point} vs ${dodge}`, ...h].slice(0, 6))
     if (vibe && 'vibrate' in navigator) { try { navigator.vibrate(vibe) } catch { /* unsupported */ } }
@@ -161,24 +167,30 @@ export default function App() {
       {room.status === 'lobby' && room.publicMatch && room.players.length >= 2 && <p className="waiting"><span className="spinner"/> Filling the match. It starts automatically after the 15-second window.</p>}
       {room.status === 'lobby' && !room.publicMatch && room.hostId === socket.id && <button className="button primary full" disabled={room.players.length < 2} onClick={() => socket.emit('room:start')}>START GAME <span>↗</span></button>}
       {room.status === 'lobby' && !room.publicMatch && room.hostId !== socket.id && <p className="waiting">Waiting for the host to start…</p>}
-      {room.status === 'playing' && <div className="round-banner"><span>ROUND {room.round}</span>{room.countdownEndsAt && room.countdownEndsAt > Date.now() ? 'GET READY…' : 'MAKE YOUR MOVE'}</div>}
+      {room.status === 'playing' && <div className="round-banner"><span>ROUND {room.round}</span>{inCountdown ? 'GET READY…' : room.turnPhase === 'pointer' ? (myRole === 'Pointer' ? 'YOUR TURN: POINT' : 'OPPONENT TURN: POINT') : room.turnPhase === 'dodger' ? (myRole === 'Dodger' ? 'YOUR TURN: DODGE' : 'OPPONENT TURN: DODGE') : 'RESULT'}{secondsLeft !== null && !inCountdown && room.turnPhase !== 'result' && <em className="phase-timer"> · {secondsLeft}s</em>}</div>}
       </div><div className="panel game-panel"><div className="game-top"><span>{room.status === 'lobby' ? 'PLAYER LINEUP' : `ROUND ${room.round}`}</span><span className="live-pill">{room.status === 'playing' ? '● LIVE' : room.status === 'finished' ? '● FINISHED' : '● LOBBY'}</span></div>
       <div className="rank-line" aria-label="Player standings">{[...room.players].sort((a, b) => b.lives - a.lives).map((p, i) => <div className={`rank-player ${p.id === socket.id ? 'is-you' : ''} ${p.lives === 0 ? 'is-out' : ''}`} key={p.id}><span className="rank-number">#{i + 1}</span><span className={`player-avatar avatar-${room.players.indexOf(p) % 4}`}>{p.name.slice(0,1).toUpperCase()}</span><span className="rank-name">{p.name}</span><span className="rank-hearts">{'♥'.repeat(p.lives)}</span></div>)}</div>
       {room.status === 'playing' && me && <div className="my-status"><div><small>YOU</small><strong>{me.name}</strong></div><div className="my-lives" aria-label={`${me.lives} lives left`}>{[0, 1, 2].map(i => <span key={i} className={i < me.lives ? 'on' : 'off'}>♥</span>)}<em>{me.lives}/3 LIVES</em></div><div className="my-score"><small>SCORE</small><strong>{me.score}</strong></div></div>}
       {room.status === 'playing' && <><div className="role-card"><div className="role-icon">{myRole === 'Pointer' ? '☝' : myRole === 'Dodger' ? '↗' : '◉'}</div><div><small>YOUR ROLE THIS ROUND</small><strong>{myRole ?? 'SPECTATING'}</strong><span className="role-help">{myRole === 'Pointer' ? 'You point with your hand. Your opponent must dodge.' : myRole === 'Dodger' ? 'You dodge with your head. Move opposite the pointer.' : 'Watch the live round. Your turn is coming next.'}</span></div></div><div className="opponent">{myRole && <><span>{myRole === 'Pointer' ? 'YOUR DODGER' : 'YOUR POINTER'}</span><strong>{room.players.find(p => p.id === (myRole === 'Pointer' ? room.dodgerId : room.pointerId))?.name}</strong></>}</div>
-      {myRole === 'Dodger' && !room.result && <div className="opponent-signal" aria-live="polite"><span className="signal-hand">☝</span><div><b>OPPONENT HAND ACTIVE</b><small>Watch the gesture, then choose your dodge before time runs out. The final direction stays hidden.</small></div></div>}
-      {room.result && <div className={`result-card ${room.result.caught ? 'caught' : 'dodged'}`}><strong>{room.result.caught ? '💥 CAUGHT — 1 LIFE LOST' : '🎉 SUCCESSFUL DODGE!'}</strong><span>{room.result.message} · Point {arrows[room.result.pointerDirection]} · Dodge {arrows[room.result.dodgeDirection]}</span></div>}
+      {myRole && (room.turnPhase === 'pointer' || room.turnPhase === 'dodger') && <div className={`opponent-signal ${myTurn ? 'is-mine' : ''}`} aria-live="polite">
+        <span className={`signal-hand ${room.turnPhase === 'dodger' && room.aimDirection ? 'virtual-hand' : ''}`}>{room.turnPhase === 'dodger' && room.aimDirection ? arrows[room.aimDirection] : '☝'}</span>
+        <div>{myRole === 'Pointer'
+          ? (myTurn ? <><b>YOUR TURN · POINT</b><small>Aim in one direction. Your opponent sees it only after you lock in.</small></> : <><b>OPPONENT TURN · DODGE</b><small>Your point is locked. Waiting for their dodge.</small></>)
+          : (room.turnPhase === 'pointer' ? <><b>OPPONENT TURN · POINT</b><small>Watch their hand. The point appears here when they lock in.</small></> : <><b>{room.aimDirection ? `THE POINT ${showDir(room.aimDirection)}` : 'THE POINT'}</b><small>Move the exact opposite way before time runs out.</small></>)}
+        </div>
+      </div>}
+      {room.result && <div className={`result-card ${room.result.caught ? 'caught' : 'dodged'}`}><strong>{room.result.timedOut?.length ? '⏱ TIME RAN OUT' : room.result.caught ? '💥 CAUGHT — 1 LIFE LOST' : '🎉 SUCCESSFUL DODGE!'}</strong><span>{room.result.message} · Point {showDir(room.result.pointerDirection)} · Dodge {showDir(room.result.dodgeDirection)}</span></div>}
       {history.length > 0 && <div className="round-log" aria-label="Round history">{history.map((line, i) => <div key={i}>{line}</div>)}</div>}
-      {myRole && <CameraInput immersive autoStart role={myRole} mode={room.mode} round={room.round} targetDirection={myRole === 'Dodger' && room.turnPhase === 'dodger' ? room.aimDirection : null} manualDirection={manualDirection} active={myTurn && !room.submitted.includes(socket.id!)} locked={room.submitted.includes(socket.id!)} onPreview={direction => { if (myRole === 'Pointer' && myTurn) socket.emit('game:aim', { direction }) }} onSelect={direction => { if (myTurn) socket.emit('game:move', { direction }) }}/>} 
+      {myRole && <CameraInput immersive autoStart role={myRole} mode={room.mode} round={room.round} targetDirection={myRole === 'Dodger' && room.turnPhase === 'dodger' ? room.aimDirection : null} manualDirection={manualDirection} onTracking={setCameraTracking} active={myTurn && !room.submitted.includes(socket.id!)} locked={room.submitted.includes(socket.id!)} onPreview={direction => { if (myRole === 'Pointer' && myTurn) socket.emit('game:aim', { direction }) }} onSelect={direction => { if (myTurn) socket.emit('game:move', { direction }) }}/>} 
       {myRole && <div className="turn-instruction"><b>{myTurn ? (myRole === 'Pointer' ? 'YOUR TURN: POINT' : 'YOUR TURN: DODGE') : 'OPPONENT TURN'}</b><span>{myTurn ? (myRole === 'Pointer' ? 'Aim your hand in one direction, or use a button.' : room.aimDirection ? `Move your head ${arrows[room.aimDirection]} opposite to escape.` : 'Choose the exact opposite direction, or use a button.') : 'Watch the round. Your controls will activate when your phase begins.'}</span><small>Camera is optional — use the direction buttons when your phase is active.</small></div>}
-      {myRole && <div className="manual-label">CAMERA AUTO-INPUT · TAP A DIRECTION IF NEEDED</div>}
-      {myRole && myTurn && !room.submitted.includes(socket.id!) && <div className="direction-pad" style={{ '--cols': MODES[room.mode].count === 2 ? 2 : 3 } as React.CSSProperties}>{MODES[room.mode].directions.map(d => <button key={d} className="direction-button" disabled={inCountdown} onClick={() => { if (inCountdown) return; setManualDirection(d); if (myRole === 'Pointer') socket.emit('game:aim', { direction: d }); socket.emit('game:move', { direction: d }) }}><span>{arrows[d]}</span><small>{d.replace('-', ' ')}</small></button>)}</div>}
+      {myTurn && !cameraTracking && !room.submitted.includes(socket.id!) && <div className="manual-label">CAMERA OFF · TAP YOUR DIRECTION</div>}
+      {myRole && myTurn && !cameraTracking && !room.submitted.includes(socket.id!) && <div className="direction-pad" style={{ '--cols': MODES[room.mode].count === 2 ? 2 : 3 } as React.CSSProperties}>{MODES[room.mode].directions.map(d => <button key={d} className="direction-button" disabled={inCountdown} onClick={() => { if (inCountdown) return; setManualDirection(d); if (myRole === 'Pointer') socket.emit('game:aim', { direction: d }); socket.emit('game:move', { direction: d }) }}><span>{arrows[d]}</span><small>{d.replace('-', ' ')}</small></button>)}</div>}
       {myRole && room.submitted.includes(socket.id!) && <p className="waiting"><span className="spinner"/> Locked in. Waiting for the other player…</p>}
       {!myRole && room.status === 'playing' && <p className="waiting">Your turn is coming up. Stay sharp.</p>}</>}
       {room.status === 'lobby' && <div className="how-to"><div className="how-mark">✳</div><h3>HOW TO PLAY</h3><p>Roles rotate automatically. Move your hand or head, or use the buttons. It is a quick body break with friends: the Pointer aims, the Dodger reacts in the exact opposite direction.</p><div className="lives-key">♥ <span>3 LIVES EACH · MOVE, RESET, PLAY AGAIN</span></div></div>}
       {room.status === 'finished' && <div className="how-to"><div className="how-mark">🏆</div><h3>{room.winnerId === socket.id ? 'VICTORY' : `${room.players.find(p => p.id === room.winnerId)?.name ?? 'A player'} WINS`}</h3><p>Last player standing. Start a fresh match with the same mode.</p><button className="button primary full" onClick={playAgain}>PLAY AGAIN</button><button className="button secondary full" onClick={leaveRoom}>BACK TO HOME</button></div>}
       </div></div></section>}
     {overlay && <div key={overlay.key} className={`round-overlay ${overlay.tone}`} role="status" aria-live="assertive"><strong>{overlay.title}</strong><span>{overlay.detail}</span></div>}
-    {room?.status === 'playing' && myRole && <div className="arena-status"><span>ROUND {room.round} · {myRole.toUpperCase()}</span><strong>{myTurn ? (myRole === 'Pointer' ? 'POINT NOW' : 'DODGE NOW') : 'OPPONENT TURN'}</strong><span>{room.players.filter(p => p.lives > 0).length} PLAYERS LEFT</span></div>}
+    {room?.status === 'playing' && myRole && <div className="arena-status"><span>ROUND {room.round} · {myRole.toUpperCase()}</span><strong>{myTurn ? (myRole === 'Pointer' ? 'POINT NOW' : 'DODGE NOW') : room.turnPhase === 'result' ? 'RESULT' : 'OPPONENT TURN'}{myTurn && secondsLeft !== null && !inCountdown && <> · {secondsLeft}s</>}</strong><span>{room.players.filter(p => p.lives > 0).length} PLAYERS LEFT</span></div>}
   </main>
 }
